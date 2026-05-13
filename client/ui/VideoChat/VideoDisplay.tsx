@@ -3,7 +3,7 @@ export default function VideoDisplay({ videoSource }: { videoSource: string }) {
     <>
       <video
         src={videoSource}
-        className="w-full h-full bg-amber-200 rounded-lg"
+        className="w-full h-full object-cover bg-zinc-200 rounded-lg"
       ></video>
     </>
   );
