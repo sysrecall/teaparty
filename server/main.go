@@ -31,7 +31,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("listening on ws://%v", listener.Addr())
+	log.Printf("listening on http://%v", listener.Addr())
 
 	app := app.NewApplication()
 	handler := routes.SetupRoutes(app)
