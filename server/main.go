@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"teaparty/internal/app"
+	"teaparty/internal/routes"
 	"time"
 )
 
@@ -20,29 +22,29 @@ func main() {
 	}
 }
 
-// run starts a http.Server for the passed in address
-// with all requests handled by echoServer.
 func run() error {
 	if len(os.Args) < 2 {
 		return errors.New("please provide an address to listen on as the first argument")
 	}
 
-	l, err := net.Listen("tcp", os.Args[1])
+	listener, err := net.Listen("tcp", os.Args[1])
 	if err != nil {
 		return err
 	}
-	log.Printf("listening on ws://%v", l.Addr())
+	log.Printf("listening on ws://%v", listener.Addr())
 
-	s := &http.Server{
-		Handler: echoServer{
-			logf: log.Printf,
-		},
+	app := app.NewApplication()
+	handler := routes.SetupRoutes(app)
+
+	server := &http.Server{
+		Handler: handler,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 	}
+
 	errc := make(chan error, 1)
 	go func() {
-		errc <- s.Serve(l)
+		errc <- server.Serve(listener)
 	}()
 
 	sigs := make(chan os.Signal, 1)
@@ -57,5 +59,5 @@ func run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 
-	return s.Shutdown(ctx)
+	return server.Shutdown(ctx)
 }
