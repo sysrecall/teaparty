@@ -11,6 +11,7 @@ import (
 type Application struct {
 	Logger *log.Logger
 	WebsocketHandler *api.WebsocketHandler
+	
 }
 
 func NewApplication() *Application {

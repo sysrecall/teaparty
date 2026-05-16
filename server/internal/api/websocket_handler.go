@@ -24,7 +24,7 @@ func NewWebsocketHandler(logger *log.Logger) *WebsocketHandler {
 
 func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		Subprotocols: []string{"echo"},
+		// Subprotocols: []string{"echo"},
 	})
 	if err != nil {
 		wh.logger.Printf("%v", err)
@@ -32,10 +32,10 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 	}
 	defer connection.CloseNow()
 
-	if connection.Subprotocol() != "echo" {
-		connection.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
-		return
-	}
+	// if connection.Subprotocol() != "echo" {
+	// 	connection.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
+	// 	return
+	// }
 
 	limiter := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
 	for {
@@ -53,11 +53,11 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 // echo reads from the WebSocket connection and then writes
 // the received message back to it.
 // The entire function has 10s to complete.
-func echo(connection *websocket.Conn, l *rate.Limiter) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+func echo(connection *websocket.Conn, limiter *rate.Limiter) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute * 60)
 	defer cancel()
 
-	err := l.Wait(ctx)
+	err := limiter.Wait(ctx)
 	if err != nil {
 		return err
 	}

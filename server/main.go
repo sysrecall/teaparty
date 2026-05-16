@@ -42,17 +42,18 @@ func run() error {
 		WriteTimeout: time.Second * 10,
 	}
 
-	errc := make(chan error, 1)
+	errorChannel := make(chan error, 1)
 	go func() {
-		errc <- server.Serve(listener)
+		errorChannel <- server.Serve(listener)
 	}()
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt)
+	signalsChannel := make(chan os.Signal, 1)
+	signal.Notify(signalsChannel, os.Interrupt)
+
 	select {
-	case err := <-errc:
+	case err := <-errorChannel:
 		log.Printf("failed to serve: %v", err)
-	case sig := <-sigs:
+	case sig := <-signalsChannel:
 		log.Printf("terminating: %v", sig)
 	}
 
