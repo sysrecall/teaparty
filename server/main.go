@@ -37,7 +37,7 @@ func run() error {
 	handler := routes.SetupRoutes(app)
 
 	server := &http.Server{
-		Handler: handler,
+		Handler:      handler,
 		ReadTimeout:  time.Second * 10,
 		WriteTimeout: time.Second * 10,
 	}
