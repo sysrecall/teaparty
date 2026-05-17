@@ -7,21 +7,28 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
 	"golang.org/x/time/rate"
 )
 
-type WebsocketHandler struct {
-	logger *log.Logger
-	ConnectionsChannel chan *websocket.Conn
+
+type Queue interface {
+	Enqueue(*websocket.Conn)
 }
 
-func NewWebsocketHandler(logger *log.Logger) *WebsocketHandler {
+type WebsocketHandler struct {
+	logger *log.Logger
+	mu sync.Mutex
+	Queue Queue
+}
+
+func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
 	return &WebsocketHandler{
 		logger: logger,
-		ConnectionsChannel: make(chan *websocket.Conn, 100),
+		Queue: queue,
 	}
 }
 
@@ -34,26 +41,26 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	wh.ConnectionsChannel <- connection
+	wh.Queue.Enqueue(connection)
 
-	defer connection.CloseNow()
+	// defer connection.CloseNow()
 
 	// if connection.Subprotocol() != "echo" {
 	// 	connection.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
 	// 	return
 	// }
 
-	limiter := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
-	for {
-		err = echo(connection, limiter)
-		if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-			return
-		}
-		if err != nil {
-			wh.logger.Printf("failed to echo with %v: %v", r.RemoteAddr, err)
-			return
-		}
-	}
+	// limiter := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
+	// for {
+	// 	err = echo(connection, limiter)
+	// 	if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
+	// 		return
+	// 	}
+	// 	if err != nil {
+	// 		wh.logger.Printf("failed to echo with %v: %v", r.RemoteAddr, err)
+	// 		return
+	// 	}
+	// }
 }
 
 // echo reads from the WebSocket connection and then writes

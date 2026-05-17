@@ -36,6 +36,9 @@ func run() error {
 	app := app.NewApplication()
 	handler := routes.SetupRoutes(app)
 
+	// make pairs continiously
+	go app.MakePairs()
+
 	server := &http.Server{
 		Handler:      handler,
 		ReadTimeout:  time.Second * 10,

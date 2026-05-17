@@ -8,38 +8,64 @@ import (
 	"teaparty/internal/api"
 	"time"
 
+	"github.com/coder/websocket"
 	"golang.org/x/time/rate"
+)
+
+type Client struct {
+	Conn *websocket.Conn
+	Peer *Client
+	State ClientState
+	Send chan []byte
+	// IceCandidates any
+	// Sdf           any
+}
+
+type ClientState int
+
+const (
+	Waiting ClientState = iota
+	Matched
+	Disconnected
 )
 
 type Application struct {
 	Logger *log.Logger
 	WebsocketHandler *api.WebsocketHandler
+	WaitingQueue chan *websocket.Conn
+	Clients []*Client
+}
+
+func (app *Application) Enqueue(connection *websocket.Conn) {
+	app.WaitingQueue <- connection
 }
 
 func NewApplication() *Application {
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
-	websocketHandler := api.NewWebsocketHandler(logger)
-
-	return &Application{
+	app := &Application{
 		Logger: logger,
-		WebsocketHandler: websocketHandler,
+		WaitingQueue: make(chan *websocket.Conn, 100),
 	}
 
+	websocketHandler := api.NewWebsocketHandler(logger, app)
+	app.WebsocketHandler = websocketHandler
+
+	return app
 }
 
 func (app *Application) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Status is available\n")
 }
 
-func (app *Application) MakePair() {
+func (app *Application) MakePairs() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		<- ticker.C
 		
-		connection1 := <- app.WebsocketHandler.ConnectionsChannel
-		connection2 := <- app.WebsocketHandler.ConnectionsChannel
+		connection1 := <- app.WaitingQueue
+		connection2 := <- app.WaitingQueue
 
 		limiter := rate.NewLimiter(rate.Every(time.Second * 2), 3)
 
