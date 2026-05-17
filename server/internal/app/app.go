@@ -62,6 +62,8 @@ func NewApplication() *Application {
 	app := &Application{
 		Logger: logger,
 		WaitingQueue: make(chan *websocket.Conn, 100),
+		mu: sync.Mutex{},
+		Rooms: make(map[string]*Room),
 	}
 
 	websocketHandler := api.NewWebsocketHandler(logger, app)
@@ -80,7 +82,6 @@ func (app *Application) MakePairs() {
 		connection2 := <- app.WaitingQueue
 
 		// limiter := rate.NewLimiter(rate.Every(time.Second * 2), 3)
-
 
 
 		// create a room and populate the room
@@ -117,11 +118,7 @@ func (app *Application) MakePairs() {
 			MessageContent: room.Id,
 		}
 
-		ctx, err := context.WithTimeout(context.Background(), time.Second * 10)
-		if err != nil {
-			fmt.Printf("could not create context: %w", err)
-			continue
-		}
+		ctx, _ := context.WithTimeout(context.Background(), time.Second * 10)
 
 		app.WebsocketHandler.WriteToConnection(ctx, connection1, message1)
 		app.WebsocketHandler.WriteToConnection(ctx, connection2, message2)
