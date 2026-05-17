@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -21,7 +20,6 @@ type Queue interface {
 
 type WebsocketHandler struct {
 	logger *log.Logger
-	mu sync.Mutex
 	Queue Queue
 }
 
@@ -43,24 +41,8 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 
 	wh.Queue.Enqueue(connection)
 
-	// defer connection.CloseNow()
+	<- r.Context().Done()
 
-	// if connection.Subprotocol() != "echo" {
-	// 	connection.Close(websocket.StatusPolicyViolation, "client must speak the echo subprotocol")
-	// 	return
-	// }
-
-	// limiter := rate.NewLimiter(rate.Every(time.Millisecond*100), 10)
-	// for {
-	// 	err = echo(connection, limiter)
-	// 	if websocket.CloseStatus(err) == websocket.StatusNormalClosure {
-	// 		return
-	// 	}
-	// 	if err != nil {
-	// 		wh.logger.Printf("failed to echo with %v: %v", r.RemoteAddr, err)
-	// 		return
-	// 	}
-	// }
 }
 
 // echo reads from the WebSocket connection and then writes
@@ -99,35 +81,12 @@ type Message struct {
 	MessageContent string `json:"content"`
 }
 
-func (wh *WebsocketHandler) WriteToConnection(toConnection *websocket.Conn, message Message, limiter *rate.Limiter) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute * 60)
-	defer cancel()
+func (wh *WebsocketHandler) WriteToConnection(ctx context.Context, connection *websocket.Conn, message Message) error {
+	data, err := json.Marshal(message)
 
-	err := limiter.Wait(ctx)
-	if err != nil {
-		return err
-	}
-
-	messageType, _, err := toConnection.Reader(ctx)
-	if err != nil {
-		return err
-	}
-
-	writer, err := toConnection.Writer(ctx, messageType)
-	if err != nil {
-		return err
-	}
-
-	messageSerialized, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("unable to serialize message: %w", err)
 	}
 
-	_, err = writer.Write(messageSerialized)
-	if err != nil {
-		return fmt.Errorf("failed to write: %w", err)
-	}
-
-	err = writer.Close()
-	return err
+	return connection.Write(ctx, websocket.MessageText, data)
 }
