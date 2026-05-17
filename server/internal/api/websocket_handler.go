@@ -14,11 +14,10 @@ import (
 	"golang.org/x/time/rate"
 )
 
-
 type Client struct {
-	Id string
-	Room *Room
-	Conn *websocket.Conn
+	Id      string
+	Room    *Room
+	Conn    *websocket.Conn
 	Matched chan struct{}
 	// State ClientState
 	// Send chan []byte
@@ -35,7 +34,7 @@ const (
 )
 
 type Room struct {
-	Id string
+	Id      string
 	Client1 *Client
 	Client2 *Client
 }
@@ -54,20 +53,19 @@ func (room *Room) Peer(client *Client) *Client {
 	return room.Client1
 }
 
-
 type Queue interface {
 	Enqueue(*websocket.Conn) *Client
 }
 
 type WebsocketHandler struct {
 	logger *log.Logger
-	Queue Queue
+	Queue  Queue
 }
 
 func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
 	return &WebsocketHandler{
 		logger: logger,
-		Queue: queue,
+		Queue:  queue,
 	}
 }
 
@@ -91,7 +89,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		connection.Close(websocket.StatusGoingAway, "disconnected while waiting")
 		return
 	}
- 
+
 	// notify client about match
 	ctx := r.Context()
 	err = wh.WriteToConnection(ctx, connection, Message{
@@ -102,7 +100,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		wh.logger.Printf("failed to send matched message: %v", err)
 		return
 	}
- 
+
 	// relay messages
 	peer := client.Room.Peer(client)
 	for {
@@ -123,7 +121,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 // the received message back to it.
 // The entire function has 60m to complete.
 func echo(connection *websocket.Conn, limiter *rate.Limiter) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute * 60)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*60)
 	defer cancel()
 
 	err := limiter.Wait(ctx)
@@ -151,7 +149,7 @@ func echo(connection *websocket.Conn, limiter *rate.Limiter) error {
 }
 
 type Message struct {
-	MessageType string `json:"type"`
+	MessageType    string `json:"type"`
 	MessageContent string `json:"content"`
 }
 

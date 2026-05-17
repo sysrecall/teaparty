@@ -13,17 +13,17 @@ import (
 )
 
 type Application struct {
-	Logger *log.Logger
+	Logger           *log.Logger
 	WebsocketHandler *api.WebsocketHandler
-	WaitingQueue chan *api.Client
-	Rooms map[string]*api.Room
-	mu sync.Mutex
+	WaitingQueue     chan *api.Client
+	Rooms            map[string]*api.Room
+	mu               sync.Mutex
 }
 
 func (app *Application) Enqueue(connection *websocket.Conn) *api.Client {
 	client := &api.Client{
-		Id: uuid.NewString(),
-		Conn: connection,
+		Id:      uuid.NewString(),
+		Conn:    connection,
 		Matched: make(chan struct{}),
 	}
 
@@ -34,10 +34,10 @@ func (app *Application) Enqueue(connection *websocket.Conn) *api.Client {
 func NewApplication() *Application {
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	app := &Application{
-		Logger: logger,
+		Logger:       logger,
 		WaitingQueue: make(chan *api.Client, 100),
-		mu: sync.Mutex{},
-		Rooms: make(map[string]*api.Room),
+		mu:           sync.Mutex{},
+		Rooms:        make(map[string]*api.Room),
 	}
 
 	app.WebsocketHandler = api.NewWebsocketHandler(logger, app)
@@ -51,16 +51,15 @@ func (app *Application) HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 func (app *Application) MakePairs() {
 	for {
-		client1 := <- app.WaitingQueue
-		client2 := <- app.WaitingQueue
+		client1 := <-app.WaitingQueue
+		client2 := <-app.WaitingQueue
 
 		// limiter := rate.NewLimiter(rate.Every(time.Second * 2), 3)
-
 
 		// create a room and populate the room
 
 		room := &api.Room{
-			Id: uuid.NewString(),
+			Id:      uuid.NewString(),
 			Client1: client1,
 			Client2: client2,
 		}
@@ -72,7 +71,6 @@ func (app *Application) MakePairs() {
 		app.mu.Lock()
 		app.Rooms[room.Id] = room
 		app.mu.Unlock()
-
 
 		// close matching channel
 		close(client1.Matched)
