@@ -1,10 +1,27 @@
-export default function VideoDisplay({ videoSource }: { videoSource: string }) {
+"use client";
+
+import { useEffect, useRef } from "react";
+
+export default function VideoDisplay({
+  videoSource,
+}: {
+  videoSource: MediaStream | undefined;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current && videoSource) {
+      videoRef.current.srcObject = videoSource;
+    }
+  }, [videoSource]);
+
   return (
-    <>
-      <video
-        src={videoSource}
-        className="w-full h-full object-cover bg-zinc-200 rounded-lg"
-      ></video>
-    </>
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      className="w-full h-full object-cover bg-zinc-200 rounded-lg"
+    />
   );
 }
