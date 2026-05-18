@@ -72,6 +72,7 @@ func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
 func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		// Subprotocols: []string{"echo"},
+		OriginPatterns: []string{"localhost*"},
 	})
 	if err != nil {
 		wh.logger.Printf("%v", err)
