@@ -2,10 +2,10 @@ import VideoDisplay from "@/ui/VideoChat/VideoDisplay";
 
 export default function VideoChat({
   localStream,
-  strangerStream,
+  remoteStream: strangerStream,
 }: {
   localStream: MediaStream | undefined;
-  strangerStream: MediaStream | undefined;
+  remoteStream: MediaStream | undefined;
 }) {
   return (
     <div className="flex flex-col w-full h-full gap-2">
