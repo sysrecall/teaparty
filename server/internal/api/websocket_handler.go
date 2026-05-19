@@ -19,10 +19,10 @@ type Client struct {
 	Room    *Room
 	Conn    *websocket.Conn
 	Matched chan struct{}
+	// IceCandidates any
+	// Offer         any
 	// State ClientState
 	// Send chan []byte
-	// IceCandidates any
-	// Sdf           any
 }
 
 type ClientState int
@@ -69,15 +69,20 @@ func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
 	}
 }
 
+const READ_LIMIT_BYTES = 1024 * 10
+
 func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		// Subprotocols: []string{"echo"},
 		OriginPatterns: []string{"localhost*"},
 	})
+
 	if err != nil {
 		wh.logger.Printf("%v", err)
 		return
 	}
+
+	connection.SetReadLimit(READ_LIMIT_BYTES)
 
 	client := wh.Queue.Enqueue(connection)
 
@@ -115,6 +120,9 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 
 	// relay messages
 	peer := client.Room.Peer(client)
+	relayContext, cancelRelay := context.WithCancel(context.Background())
+	defer cancelRelay()
+
 	for {
 		_, data, err := connection.Read(ctx)
 		if err != nil {
@@ -122,7 +130,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 			peer.Conn.Close(websocket.StatusGoingAway, "peer disconnected")
 			return
 		}
-		if err := peer.Conn.Write(ctx, websocket.MessageText, data); err != nil {
+		if err := peer.Conn.Write(relayContext, websocket.MessageText, data); err != nil {
 			wh.logger.Printf("failed to relay to peer: %v", err)
 			return
 		}
