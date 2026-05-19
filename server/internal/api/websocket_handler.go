@@ -93,10 +93,21 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 
 	// notify client about match
 	ctx := r.Context()
-	err = wh.WriteToConnection(ctx, connection, Message{
-		MessageType:    "matched",
-		MessageContent: client.Room.Id,
-	})
+
+	var messageContent string
+
+	if client == client.Room.Client1 {
+		messageContent = "offerer"
+	} else {
+		messageContent = "answerer"
+	}
+
+	message := Message{
+		MessageType:    "match",
+		MessageContent: messageContent,
+	}
+
+	err = wh.WriteToConnection(ctx, connection, message)
 	if err != nil {
 		wh.logger.Printf("failed to send matched message: %v", err)
 		return
@@ -151,7 +162,7 @@ func echo(connection *websocket.Conn, limiter *rate.Limiter) error {
 
 type Message struct {
 	MessageType    string `json:"type"`
-	MessageContent string `json:"content"`
+	MessageContent string `json:"message"`
 }
 
 func (wh *WebsocketHandler) WriteToConnection(ctx context.Context, connection *websocket.Conn, message Message) error {
