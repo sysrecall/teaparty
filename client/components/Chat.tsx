@@ -21,70 +21,96 @@ async function openCamera(constraints: MediaStreamConstraints | undefined) {
   return await navigator.mediaDevices.getUserMedia(constraints);
 }
 
+type Status = "idle" | "waiting" | "chatting";
+
 export default function Chat() {
   const [socket, setSocket] = useState<WebSocket>();
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [remoteStream, setRemoteStream] = useState<MediaStream>();
   const [peerConnection, setPeerConnnection] = useState<RTCPeerConnection>();
+  const [status, setStatus] = useState<Status>("idle");
 
   async function connect() {
     const stream = await openCamera(CONSTRAINTS);
     setLocalStream(stream);
+    setStatus("waiting");
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     setPeerConnnection(pc);
 
+    // add streams to peer connection
+    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
     pc.ontrack = (event) => {
       const [rs] = event.streams;
       setRemoteStream(rs);
+      setStatus("chatting");
     };
-
-    const offer = pc.createOffer();
 
     const ws = new WebSocket("ws://localhost:8080/ws");
 
     ws.onopen = (event) => {
       console.log("Connected to the server");
-
-      // setup event handlers on peer connection
-      ws.send(
-        JSON.stringify({
-          type: "offer",
-          message: offer,
-        }),
-      );
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          ws.send(
-            JSON.stringify({
-              type: "candidate",
-              message: event.candidate,
-            }),
-          );
-        }
-      };
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       console.log("Message from the server:", event.data);
 
       const data = JSON.parse(event.data);
 
       switch (data.type) {
+        case "match":
+          pc.onicecandidate = (event) => {
+            if (event.candidate) {
+              ws.send(
+                JSON.stringify({
+                  type: "candidate",
+                  message: event.candidate,
+                }),
+              );
+            }
+          };
+
+          // only send offer if this is the offerer
+          if (data.message === "offerer") {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            ws.send(
+              JSON.stringify({
+                type: "offer",
+                message: offer,
+              }),
+            );
+          }
+
+          break;
+
         case "offer":
-          pc.setRemoteDescription(data.message);
-          const answer = pc.createAnswer();
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(data.message),
+          );
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
           ws.send(
             JSON.stringify({
               type: "answer",
               message: answer,
             }),
           );
+
+          break;
+
+        case "answer":
+          await pc.setRemoteDescription(
+            new RTCSessionDescription(data.message),
+          );
+
           break;
 
         case "candidate":
-          pc.addIceCandidate(data.message);
+          await pc.addIceCandidate(new RTCIceCandidate(data.message));
           break;
 
         default:
@@ -98,6 +124,7 @@ export default function Chat() {
 
     ws.onclose = (event) => {
       console.log("Disconnected from the server");
+      setStatus("idle");
     };
 
     setSocket(ws);
