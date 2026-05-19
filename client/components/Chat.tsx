@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import TextChat from "./TextChat";
 import VideoChat from "./VideoChat";
 
@@ -24,22 +24,24 @@ async function openCamera(constraints: MediaStreamConstraints | undefined) {
 type Status = "idle" | "waiting" | "chatting";
 
 export default function Chat() {
-  const [socket, setSocket] = useState<WebSocket>();
+  const socketRef = useRef<WebSocket>(null);
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [remoteStream, setRemoteStream] = useState<MediaStream>();
-  const [peerConnection, setPeerConnnection] = useState<RTCPeerConnection>();
+  const peerConnectionRef = useRef<RTCPeerConnection>(null);
   const [status, setStatus] = useState<Status>("idle");
 
   async function connect() {
-    const stream = await openCamera(CONSTRAINTS);
-    setLocalStream(stream);
-    setStatus("waiting");
+    const socket = new WebSocket("ws://localhost:8080/ws");
+    socketRef.current = socket;
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    setPeerConnnection(pc);
+    peerConnectionRef.current = pc;
 
-    // add streams to peer connection
+    const stream = await openCamera(CONSTRAINTS);
+    setLocalStream(stream);
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+    setStatus("waiting");
 
     pc.ontrack = (event) => {
       const [rs] = event.streams;
@@ -47,13 +49,11 @@ export default function Chat() {
       setStatus("chatting");
     };
 
-    const ws = new WebSocket("ws://localhost:8080/ws");
-
-    ws.onopen = (event) => {
+    socket.onopen = (event) => {
       console.log("Connected to the server");
     };
 
-    ws.onmessage = async (event) => {
+    socket.onmessage = async (event) => {
       console.log("Message from the server:", event.data);
 
       const data = JSON.parse(event.data);
@@ -62,7 +62,7 @@ export default function Chat() {
         case "match":
           pc.onicecandidate = (event) => {
             if (event.candidate) {
-              ws.send(
+              socket.send(
                 JSON.stringify({
                   type: "candidate",
                   message: event.candidate,
@@ -76,7 +76,7 @@ export default function Chat() {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
 
-            ws.send(
+            socket.send(
               JSON.stringify({
                 type: "offer",
                 message: offer,
@@ -93,7 +93,7 @@ export default function Chat() {
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
-          ws.send(
+          socket.send(
             JSON.stringify({
               type: "answer",
               message: answer,
@@ -118,16 +118,14 @@ export default function Chat() {
       }
     };
 
-    ws.onerror = (error) => {
+    socket.onerror = (error) => {
       console.error("Websocket Error:", error);
     };
 
-    ws.onclose = (event) => {
+    socket.onclose = (event) => {
       console.log("Disconnected from the server");
       setStatus("idle");
     };
-
-    setSocket(ws);
   }
 
   return (
