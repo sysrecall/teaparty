@@ -100,7 +100,7 @@ type turnCredentials struct {
 type turnServer struct {
 	urls        string
 	username    string
-	credentaisl string
+	credentials string
 }
 
 func (wh *WebsocketHandler) getTurnCredentials() turnCredentials {
@@ -145,7 +145,7 @@ func (wh *WebsocketHandler) getTurnCredentials() turnCredentials {
 	return turnCredentials
 }
 
-func (wh *WebsocketHandler) getTurnServers(apiKey string) []turnServer {
+func (wh *WebsocketHandler) getTurnServers(apiKey string) (string, error) {
 	domain, foundDomain := os.LookupEnv("METERED_DOMAIN")
 	if !foundDomain {
 		wh.logger.Fatal("TURN server domain does not exist in env")
@@ -162,16 +162,13 @@ func (wh *WebsocketHandler) getTurnServers(apiKey string) []turnServer {
 
 	defer res.Body.Close()
 
-	var turnServers []turnServer
-
-	err = json.NewDecoder(res.Body).Decode(&turnServers)
-
+	turnServers, err := io.ReadAll(res.Body)
 	if err != nil {
-		wh.logger.Printf("Unable to parse turn servers response: %v", err)
+		wh.logger.Printf("Error parsing body: %v", err)
+		return "", err
 	}
 
-	return turnServers
-
+	return string(turnServers), nil
 }
 
 func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
@@ -227,16 +224,20 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 	defer cancelRelay()
 
 	// get turn credentials and server array
-	// turnCredentials := wh.getTurnCredentials()
-	// turnServers := wh.getTurnServers(turnCredentials.apiKey)
+	turnCredentials := wh.getTurnCredentials()
+	turnServers, err := wh.getTurnServers(turnCredentials.apiKey)
 
-	// send turn server list
-	// message = Message{
-	// 	MessageType:    "servers",
-	// 	MessageContent: ,
-	// }
+	if err == nil {
+		// send turn server list
+		msg, err := json.Marshal(Message{
+			MessageType:    "servers",
+			MessageContent: turnServers,
+		})
 
-	// client.Conn.Write(relayContext, websocket.MessageText, message)
+		if err == nil {
+			client.Conn.Write(relayContext, websocket.MessageText, msg)
+		}
+	}
 
 	for {
 		_, data, err := connection.Read(ctx)
