@@ -1,16 +1,19 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 	"golang.org/x/time/rate"
 )
 
@@ -63,6 +66,21 @@ type WebsocketHandler struct {
 }
 
 func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
+	err := godotenv.Load("METERED_DOMAIN")
+	if err != nil {
+		logger.Fatalf("Unable to load env variable: %v", err)
+	}
+
+	err = godotenv.Load("METERED_SECRET_KEY")
+	if err != nil {
+		logger.Fatalf("Unable to load env variable: %v", err)
+	}
+
+	err = godotenv.Load("TURN_CREDENTIALS_EXPIRY_SECONDS")
+	if err != nil {
+		logger.Fatalf("Unable to load env variable: %v", err)
+	}
+
 	return &WebsocketHandler{
 		logger: logger,
 		Queue:  queue,
@@ -70,6 +88,91 @@ func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
 }
 
 const READ_LIMIT_BYTES = 1024 * 10
+
+type turnCredentials struct {
+	username        string
+	password        string
+	expiryInSeconds string
+	label           string
+	apiKey          string
+}
+
+type turnServer struct {
+	urls        string
+	username    string
+	credentaisl string
+}
+
+func (wh *WebsocketHandler) getTurnCredentials() turnCredentials {
+	domain, foundDomain := os.LookupEnv("METERED_DOMAIN")
+	if !foundDomain {
+		wh.logger.Fatal("TURN server domain does not exist in env")
+	}
+
+	turnSecret, foundTurnSecret := os.LookupEnv("METERED_SECRET_KEY")
+	if !foundTurnSecret {
+		wh.logger.Fatal("TURN server secret does not exist in env")
+
+	}
+
+	turnExipry, foundTurnExpiry := os.LookupEnv("TURN_CREDENTIALS_EXPIRY_SECONDS")
+	if !foundTurnExpiry {
+		wh.logger.Fatal("TURN server expiry does not exist in env")
+	}
+
+	url := fmt.Sprintf("https://%v/api/v1/turn/credential", domain)
+	requestUrl := fmt.Sprintf("%v?secretKey=%v", url, turnSecret)
+
+	data := map[string]string{"expiryInSeconds": turnExipry}
+	jsonData, _ := json.Marshal(data)
+
+	res, err := http.Post(requestUrl, "application/json", bytes.NewBuffer(jsonData))
+
+	if err != nil {
+		wh.logger.Printf("Error requesting turn credentials: %v", err)
+	}
+
+	defer res.Body.Close()
+
+	var turnCredentials turnCredentials
+
+	err = json.NewDecoder(res.Body).Decode(&turnCredentials)
+
+	if err != nil {
+		wh.logger.Printf("Unable to parse turn credetial response: %v", err)
+	}
+
+	return turnCredentials
+}
+
+func (wh *WebsocketHandler) getTurnServers(apiKey string) []turnServer {
+	domain, foundDomain := os.LookupEnv("METERED_DOMAIN")
+	if !foundDomain {
+		wh.logger.Fatal("TURN server domain does not exist in env")
+	}
+
+	url := fmt.Sprintf("https://%v/api/v1/turn/credentials", domain)
+	requestUrl := fmt.Sprintf("%v?apiKey=%v", url, apiKey)
+
+	res, err := http.Get(requestUrl)
+
+	if err != nil {
+		wh.logger.Printf("Error requesting turn servers: %v", err)
+	}
+
+	defer res.Body.Close()
+
+	var turnServers []turnServer
+
+	err = json.NewDecoder(res.Body).Decode(&turnServers)
+
+	if err != nil {
+		wh.logger.Printf("Unable to parse turn servers response: %v", err)
+	}
+
+	return turnServers
+
+}
 
 func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
 	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -122,6 +225,18 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 	peer := client.Room.Peer(client)
 	relayContext, cancelRelay := context.WithCancel(context.Background())
 	defer cancelRelay()
+
+	// get turn credentials and server array
+	// turnCredentials := wh.getTurnCredentials()
+	// turnServers := wh.getTurnServers(turnCredentials.apiKey)
+
+	// send turn server list
+	// message = Message{
+	// 	MessageType:    "servers",
+	// 	MessageContent: ,
+	// }
+
+	// client.Conn.Write(relayContext, websocket.MessageText, message)
 
 	for {
 		_, data, err := connection.Read(ctx)
