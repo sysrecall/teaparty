@@ -15,6 +15,7 @@ const CONSTRAINTS = {
   },
 };
 
+// fallback stun only
 const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
 
 async function openCamera(constraints: MediaStreamConstraints | undefined) {
@@ -23,8 +24,19 @@ async function openCamera(constraints: MediaStreamConstraints | undefined) {
 
 type Status = "idle" | "waiting" | "chatting";
 
+type TurnServer =
+  | {
+      urls: string;
+    }
+  | {
+      urls: string;
+      username: string;
+      credentials: string;
+    };
+
 export default function Chat() {
   const socketRef = useRef<WebSocket>(null);
+  const iceServers = useRef<TurnServer[]>(ICE_SERVERS);
   const [localStream, setLocalStream] = useState<MediaStream>();
   const [remoteStream, setRemoteStream] = useState<MediaStream>();
   const peerConnectionRef = useRef<RTCPeerConnection>(null);
@@ -34,7 +46,7 @@ export default function Chat() {
     const socket = new WebSocket("ws://localhost:8080/ws");
     socketRef.current = socket;
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: iceServers.current });
     peerConnectionRef.current = pc;
 
     const stream = await openCamera(CONSTRAINTS);
@@ -83,6 +95,16 @@ export default function Chat() {
               }),
             );
           }
+
+          break;
+
+        case "servers":
+          iceServers.current = JSON.parse(data.message);
+
+          pc.setConfiguration({
+            iceServers: iceServers.current,
+          });
+          pc.restartIce();
 
           break;
 
