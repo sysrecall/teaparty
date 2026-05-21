@@ -66,20 +66,8 @@ type WebsocketHandler struct {
 }
 
 func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
-	err := godotenv.Load("METERED_DOMAIN")
-	if err != nil {
-		logger.Fatalf("Unable to load env variable: %v", err)
-	}
-
-	err = godotenv.Load("METERED_SECRET_KEY")
-	if err != nil {
-		logger.Fatalf("Unable to load env variable: %v", err)
-	}
-
-	err = godotenv.Load("TURN_CREDENTIALS_EXPIRY_SECONDS")
-	if err != nil {
-		logger.Fatalf("Unable to load env variable: %v", err)
-	}
+	// load .env file to os
+	godotenv.Load()
 
 	return &WebsocketHandler{
 		logger: logger,
@@ -90,20 +78,21 @@ func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
 const READ_LIMIT_BYTES = 1024 * 10
 
 type turnCredentials struct {
-	username        string
-	password        string
-	expiryInSeconds string
-	label           string
-	apiKey          string
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	ExpiryInSeconds int    `json:"expiryInSeconds"`
+	Label           string `json:"label,omitempty"`
+	ApiKey          string `json:"apiKey"`
 }
 
 type turnServer struct {
-	urls        string
-	username    string
-	credentials string
+	Urls        string `json:"urls"`
+	Username    string `json:"username"`
+	Credentials string `json:"credentials"`
 }
 
-func (wh *WebsocketHandler) getTurnCredentials() turnCredentials {
+func (wh *WebsocketHandler) getTurnCredentials() (turnCredentials, error) {
+	// load env variables
 	domain, foundDomain := os.LookupEnv("METERED_DOMAIN")
 	if !foundDomain {
 		wh.logger.Fatal("TURN server domain does not exist in env")
@@ -120,6 +109,7 @@ func (wh *WebsocketHandler) getTurnCredentials() turnCredentials {
 		wh.logger.Fatal("TURN server expiry does not exist in env")
 	}
 
+	// request credentials
 	url := fmt.Sprintf("https://%v/api/v1/turn/credential", domain)
 	requestUrl := fmt.Sprintf("%v?secretKey=%v", url, turnSecret)
 
@@ -140,17 +130,24 @@ func (wh *WebsocketHandler) getTurnCredentials() turnCredentials {
 
 	if err != nil {
 		wh.logger.Printf("Unable to parse turn credetial response: %v", err)
+		return turnCredentials, err
 	}
 
-	return turnCredentials
+	if res.StatusCode != http.StatusOK {
+		return turnCredentials, fmt.Errorf("unexpected status %d", res.StatusCode)
+	}
+
+	return turnCredentials, nil
 }
 
 func (wh *WebsocketHandler) getTurnServers(apiKey string) (string, error) {
+	// load env variables
 	domain, foundDomain := os.LookupEnv("METERED_DOMAIN")
 	if !foundDomain {
 		wh.logger.Fatal("TURN server domain does not exist in env")
 	}
 
+	// request ice servers
 	url := fmt.Sprintf("https://%v/api/v1/turn/credentials", domain)
 	requestUrl := fmt.Sprintf("%v?apiKey=%v", url, apiKey)
 
@@ -158,14 +155,21 @@ func (wh *WebsocketHandler) getTurnServers(apiKey string) (string, error) {
 
 	if err != nil {
 		wh.logger.Printf("Error requesting turn servers: %v", err)
+		return "", err
 	}
 
 	defer res.Body.Close()
 
+	// map servers
 	turnServers, err := io.ReadAll(res.Body)
 	if err != nil {
 		wh.logger.Printf("Error parsing body: %v", err)
 		return "", err
+	}
+
+	if res.StatusCode != 200 {
+		wh.logger.Printf("%s", string(turnServers))
+		return "", fmt.Errorf("Invalid Request")
 	}
 
 	return string(turnServers), nil
@@ -223,19 +227,23 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 	relayContext, cancelRelay := context.WithCancel(context.Background())
 	defer cancelRelay()
 
-	// get turn credentials and server array
-	turnCredentials := wh.getTurnCredentials()
-	turnServers, err := wh.getTurnServers(turnCredentials.apiKey)
+	// get turn credentials
+	turnCredentials, turnCredentialsError := wh.getTurnCredentials()
 
-	if err == nil {
+	if turnCredentialsError == nil {
+		// get turn servers
+		turnServers, turnServersError := wh.getTurnServers(turnCredentials.ApiKey)
+
 		// send turn server list
-		msg, err := json.Marshal(Message{
-			MessageType:    "servers",
-			MessageContent: turnServers,
-		})
+		if turnServersError == nil {
+			msg, err := json.Marshal(Message{
+				MessageType:    "servers",
+				MessageContent: turnServers,
+			})
 
-		if err == nil {
-			client.Conn.Write(relayContext, websocket.MessageText, msg)
+			if err == nil {
+				client.Conn.Write(relayContext, websocket.MessageText, msg)
+			}
 		}
 	}
 
