@@ -65,6 +65,8 @@ export default function Chat() {
       console.log("Connected to the server");
     };
 
+    const pendingCandidates: RTCIceCandidate[] = [];
+
     socket.onmessage = async (event) => {
       console.log("Message from the server:", event.data);
 
@@ -129,10 +131,21 @@ export default function Chat() {
             new RTCSessionDescription(data.message),
           );
 
+          pendingCandidates.forEach(async (candidate) => {
+            await pc.addIceCandidate(candidate);
+          });
+
+          pendingCandidates.length = 0;
+
           break;
 
         case "candidate":
-          await pc.addIceCandidate(new RTCIceCandidate(data.message));
+          const candidate = new RTCIceCandidate(data.message);
+          if (pc.remoteDescription) {
+            await pc.addIceCandidate(candidate);
+          } else {
+            pendingCandidates.push(candidate);
+          }
           break;
 
         default:
