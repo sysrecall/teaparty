@@ -41,6 +41,7 @@ export default function Chat() {
   const [remoteStream, setRemoteStream] = useState<MediaStream>();
   const peerConnectionRef = useRef<RTCPeerConnection>(null);
   const [status, setStatus] = useState<Status>("idle");
+  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
 
   async function connect() {
     const socket = new WebSocket("ws://localhost:8080/ws");
@@ -48,6 +49,10 @@ export default function Chat() {
 
     const pc = new RTCPeerConnection({ iceServers: iceServers.current });
     peerConnectionRef.current = pc;
+
+    peerConnectionRef.current.ondatachannel = (event) => {
+      setDataChannel(event.channel);
+    };
 
     const stream = await openCamera(CONSTRAINTS);
     setLocalStream(stream);
@@ -87,6 +92,8 @@ export default function Chat() {
 
           // only send offer if this is the offerer
           if (data.message === "offerer") {
+            setDataChannel(pc.createDataChannel("text-chat"));
+
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
 
@@ -170,7 +177,7 @@ export default function Chat() {
       </div>
 
       <div className="w-2/3 h-full">
-        <TextChat connect={connect} />
+        <TextChat connect={connect} dataChannel={dataChannel} />
       </div>
     </div>
   );

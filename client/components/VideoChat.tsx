@@ -1,4 +1,4 @@
-import VideoDisplay from "@/ui/VideoChat/VideoDisplay";
+import VideoDisplay from "@/components/ui/VideoChat/VideoDisplay";
 
 export default function VideoChat({
   localStream,
