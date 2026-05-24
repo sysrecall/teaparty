@@ -107,6 +107,11 @@ export default function Chat() {
 
           break;
 
+        case "skip":
+          setRemoteStream(undefined);
+          setStatus("waiting");
+          break;
+
         case "servers":
           iceServers.current = JSON.parse(data.message);
 
@@ -176,6 +181,10 @@ export default function Chat() {
         type: "skip",
       }),
     );
+
+    // reset streams and status
+    setRemoteStream(undefined);
+    setStatus("waiting");
   }
 
   return (
