@@ -52,6 +52,21 @@ func (app *Application) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Status is available\n")
 }
 
+func (app *Application) DeleteRoom(roomId string) {
+	delete(app.Rooms, roomId)
+}
+
+func (app *Application) Skip(client *api.Client) {
+	client1 := client.Room.Client1
+	client2 := client.Room.Client2
+
+	app.DeleteRoom(client.Room.Id)
+
+	// queue for new pair
+	app.WaitingQueue <- client1
+	app.WaitingQueue <- client2
+}
+
 func (app *Application) MakePairs() {
 	for {
 		client1 := <-app.WaitingQueue
