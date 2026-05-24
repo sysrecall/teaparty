@@ -62,6 +62,12 @@ func (app *Application) Skip(client *api.Client) {
 
 	app.DeleteRoom(client.Room.Id)
 
+	// reset match channel
+	client1.Matched = make(chan struct{})
+	client2.Matched = make(chan struct{})
+	client1.Room = nil
+	client2.Room = nil
+
 	// queue for new pair
 	app.WaitingQueue <- client1
 	app.WaitingQueue <- client2

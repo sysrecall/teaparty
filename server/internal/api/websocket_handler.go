@@ -146,18 +146,11 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		_, data, err := connection.Read(ctx)
 		if err != nil {
 			wh.logger.Printf("client %v disconnected: %v", client.Id, err)
+			skipMsg, _ := json.Marshal(Message{MessageType: "skip"})
+			peer.Conn.Write(relayContext, websocket.MessageText, skipMsg)
 			peer.Conn.Close(websocket.StatusGoingAway, "peer disconnected")
 			return
 		}
-
-		var msg Message
-		if err := json.Unmarshal(data, &msg); err == nil && msg.MessageType == "skip" {
-			wh.Queue.Skip(client)
-			skipMsg, _ := json.Marshal(Message{MessageType: "skip"})
-			peer.Conn.Write(relayContext, websocket.MessageText, skipMsg)
-			return
-		}
-
 		if err := peer.Conn.Write(relayContext, websocket.MessageText, data); err != nil {
 			wh.logger.Printf("failed to relay to peer: %v", err)
 			return
