@@ -10,7 +10,7 @@ type Message = {
 export default function TextChat({
   status,
   connect: handleConnect,
-  skip: handleSkip,
+  skip,
   dataChannel,
 }: {
   status: Status;
@@ -28,6 +28,11 @@ export default function TextChat({
       ]);
     };
   }
+
+  const handleSkip = (e: React.MouseEvent<HTMLButtonElement>) => {
+    skip();
+    setMessages([]);
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

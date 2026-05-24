@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import TextChat from "./TextChat";
 import VideoChat from "./VideoChat";
 
@@ -43,22 +43,18 @@ export default function Chat() {
   const [status, setStatus] = useState<Status>("idle");
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
 
-  async function connect() {
-    const socket = new WebSocket("ws://localhost:8080/ws");
-    socketRef.current = socket;
+  function findPeer(
+    socket: WebSocket,
+    pc: RTCPeerConnection,
+    stream: MediaStream,
+  ) {
+    const pendingCandidates: RTCIceCandidate[] = [];
 
-    const pc = new RTCPeerConnection({ iceServers: iceServers.current });
-    peerConnectionRef.current = pc;
-
-    peerConnectionRef.current.ondatachannel = (event) => {
+    pc.ondatachannel = (event) => {
       setDataChannel(event.channel);
     };
 
-    const stream = await openCamera(CONSTRAINTS);
-    setLocalStream(stream);
     stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-
-    setStatus("waiting");
 
     pc.ontrack = (event) => {
       const [rs] = event.streams;
@@ -66,14 +62,18 @@ export default function Chat() {
       setStatus("chatting");
     };
 
-    socket.onopen = (event) => {
+    socket.onopen = () => {
       console.log("Connected to the server");
     };
 
-    const pendingCandidates: RTCIceCandidate[] = [];
-
     socket.onmessage = async (event) => {
       console.log("Message from the server:", event.data);
+
+      const pc = peerConnectionRef.current;
+
+      if (!pc) {
+        return;
+      }
 
       const data = JSON.parse(event.data);
 
@@ -105,11 +105,6 @@ export default function Chat() {
             );
           }
 
-          break;
-
-        case "skip":
-          setRemoteStream(undefined);
-          setStatus("waiting");
           break;
 
         case "servers":
@@ -151,6 +146,24 @@ export default function Chat() {
 
           break;
 
+        case "skip":
+          peerConnectionRef.current?.close();
+          if (socketRef.current) {
+            socketRef.current.onclose = null;
+            socketRef.current.close();
+          }
+          const newSocket = new WebSocket("ws://localhost:8080/ws");
+          socketRef.current = newSocket;
+          const newPc = new RTCPeerConnection({
+            iceServers: iceServers.current,
+          });
+          peerConnectionRef.current = newPc;
+          setRemoteStream(undefined);
+          setDataChannel(null);
+          setStatus("waiting");
+          findPeer(newSocket, newPc, stream);
+          break;
+
         case "candidate":
           const candidate = new RTCIceCandidate(data.message);
           if (pc.remoteDescription) {
@@ -169,22 +182,42 @@ export default function Chat() {
       console.error("Websocket Error:", error);
     };
 
-    socket.onclose = (event) => {
+    socket.onclose = () => {
       console.log("Disconnected from the server");
       setStatus("idle");
     };
   }
 
-  async function skip() {
-    socketRef.current?.send(
-      JSON.stringify({
-        type: "skip",
-      }),
-    );
+  async function connect() {
+    const socket = new WebSocket("ws://localhost:8080/ws");
+    socketRef.current = socket;
 
-    // reset streams and status
-    setRemoteStream(undefined);
+    const pc = new RTCPeerConnection({ iceServers: iceServers.current });
+    peerConnectionRef.current = pc;
+
+    const stream = await openCamera(CONSTRAINTS);
+    setLocalStream(stream);
+
     setStatus("waiting");
+
+    findPeer(socket, pc, stream);
+  }
+
+  async function skip() {
+    peerConnectionRef.current?.close();
+    socketRef.current?.close();
+
+    const socket = new WebSocket("ws://localhost:8080/ws");
+    socketRef.current = socket;
+
+    const pc = new RTCPeerConnection({ iceServers: iceServers.current });
+    peerConnectionRef.current = pc;
+
+    setRemoteStream(undefined);
+    setDataChannel(null);
+    setStatus("waiting");
+
+    findPeer(socket, pc, localStream!);
   }
 
   return (
