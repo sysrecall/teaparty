@@ -22,7 +22,7 @@ async function openCamera(constraints: MediaStreamConstraints | undefined) {
   return await navigator.mediaDevices.getUserMedia(constraints);
 }
 
-type Status = "idle" | "waiting" | "chatting";
+export type Status = "idle" | "waiting" | "chatting";
 
 type TurnServer =
   | {
@@ -170,6 +170,14 @@ export default function Chat() {
     };
   }
 
+  async function skip() {
+    socketRef.current?.send(
+      JSON.stringify({
+        type: "skip",
+      }),
+    );
+  }
+
   return (
     <div className="flex w-full h-full">
       <div className="w-1/3 h-full">
@@ -177,7 +185,12 @@ export default function Chat() {
       </div>
 
       <div className="w-2/3 h-full">
-        <TextChat connect={connect} dataChannel={dataChannel} />
+        <TextChat
+          skip={skip}
+          status={status}
+          connect={connect}
+          dataChannel={dataChannel}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import ChatDisplay from "@/components/ui/TextChat/ChatDisplay";
 import { useEffect, useState } from "react";
+import { Status } from "./Chat";
 
 type Message = {
   sender: string;
@@ -7,10 +8,14 @@ type Message = {
 };
 
 export default function TextChat({
-  connect,
+  status,
+  connect: handleConnect,
+  skip: handleSkip,
   dataChannel,
 }: {
+  status: Status;
   connect: () => void;
+  skip: () => void;
   dataChannel: RTCDataChannel | null;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -49,12 +54,33 @@ export default function TextChat({
       </div>
 
       <div className="flex items-center gap-2 pl-2">
-        <button
-          className="w-28 h-20 bg-blue-500 text-white rounded-lg"
-          onClick={connect}
-        >
-          Start
-        </button>
+        {status == "idle" && (
+          <button
+            className="w-28 h-20 bg-blue-500 text-white rounded-lg"
+            onClick={handleConnect}
+          >
+            Start
+          </button>
+        )}
+
+        {status == "waiting" && (
+          <button
+            disabled={true}
+            className="w-28 h-20 bg-blue-500 text-white rounded-lg"
+          >
+            Searching
+          </button>
+        )}
+
+        {status == "chatting" && (
+          <button
+            className="w-28 h-20 bg-blue-500 text-white rounded-lg"
+            onClick={handleSkip}
+          >
+            Skip
+          </button>
+        )}
+
         <form onSubmit={handleSubmit}>
           <button
             type="submit"
