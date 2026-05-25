@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"teaparty/internal/api"
+	api "teaparty/internal/api/websocket"
 	"teaparty/internal/room"
 
 	"github.com/coder/websocket"
