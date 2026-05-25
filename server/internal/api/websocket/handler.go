@@ -71,7 +71,6 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 
 	var messageContent string
-
 	if client == client.Room.Client1 {
 		messageContent = "offerer"
 	} else {
@@ -83,13 +82,20 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		MessageContent: messageContent,
 	}
 
-	err = wh.WriteToConnection(ctx, connection, message)
+	messageJson, err := json.Marshal(message)
 	if err != nil {
-		wh.logger.Printf("failed to send matched message: %v", err)
-		return
+		fmt.Printf("unable to serialize message: %w", err)
 	}
 
-	// relay messages
+	client.Send <- messageJson
+
+	// err = wh.WriteToConnection(ctx, connection, message)
+	// if err != nil {
+	// 	wh.logger.Printf("failed to send matched message: %v", err)
+	// 	return
+	// }
+
+	//==============================================================
 	peer := client.Room.Peer(client)
 
 	// send turn servers
@@ -104,6 +110,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
+	// relay messages
 	for {
 		_, data, err := connection.Read(ctx)
 		if err != nil {

@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -77,11 +78,12 @@ func (app *Application) Skip(client *room.Client) {
 
 func (app *Application) MakePairs() {
 	for {
+		// fetch two clients, block until two found
 		client1 := <-app.WaitingQueue
 		client2 := <-app.WaitingQueue
 
 		// assign turn servers on pair
-		turnServers := app.fetchTurnServers()
+		turnServers, _ := app.fetchTurnServers()
 
 		// create a room and populate the room
 		room := &room.Room{
@@ -91,6 +93,7 @@ func (app *Application) MakePairs() {
 			TurnServers: turnServers,
 		}
 
+		// assign same room to matched clients
 		client1.Room = room
 		client2.Room = room
 
@@ -99,10 +102,9 @@ func (app *Application) MakePairs() {
 		app.Rooms[room.Id] = room
 		app.mu.Unlock()
 
-		// close matching channel
+		// close matching channel, this will unblock the handler method
 		close(client1.Matched)
 		close(client2.Matched)
-
 	}
 }
 
@@ -120,20 +122,20 @@ type turnServer struct {
 	Credentials string `json:"credentials"`
 }
 
-func (app *Application) fetchTurnServers() string {
+func (app *Application) fetchTurnServers() (string, error) {
 	creds, err := app.getTurnCredentials()
 	if err != nil {
 		app.Logger.Printf("failed to get turn credentials: %v", err)
-		return ""
+		return "", errors.New("Unable to get turn credentials")
 	}
 
 	servers, err := app.getTurnServers(creds.ApiKey)
 	if err != nil {
 		app.Logger.Printf("failed to get turn servers: %v", err)
-		return ""
+		return "", errors.New("Unable to get turn servers")
 	}
 
-	return servers
+	return servers, nil
 }
 
 func (app *Application) getTurnCredentials() (turnCredentials, error) {
@@ -146,7 +148,6 @@ func (app *Application) getTurnCredentials() (turnCredentials, error) {
 	turnSecret, foundTurnSecret := os.LookupEnv("METERED_SECRET_KEY")
 	if !foundTurnSecret {
 		app.Logger.Fatal("TURN server secret does not exist in env")
-
 	}
 
 	turnExipry, foundTurnExpiry := os.LookupEnv("TURN_CREDENTIALS_EXPIRY_SECONDS")
@@ -212,7 +213,7 @@ func (app *Application) getTurnServers(apiKey string) (string, error) {
 		return "", err
 	}
 
-	if res.StatusCode != 200 {
+	if res.StatusCode != http.StatusOK {
 		app.Logger.Printf("%s", string(turnServers))
 		return "", fmt.Errorf("Invalid Request")
 	}
