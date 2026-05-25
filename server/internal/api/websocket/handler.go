@@ -39,6 +39,7 @@ func NewWebsocketHandler(logger *log.Logger, queue Queue) *WebsocketHandler {
 const READ_LIMIT_BYTES = 1024 * 10
 
 func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Request) {
+	// create connection
 	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		// Subprotocols: []string{"echo"},
 		OriginPatterns: []string{"localhost*"},
@@ -49,6 +50,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// config
 	connection.SetReadLimit(READ_LIMIT_BYTES)
 
 	// send to waiting queue
@@ -63,12 +65,18 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 		// paired
 	case <-r.Context().Done():
 		// disconnected
-		connection.Close(websocket.StatusGoingAway, "disconnected while waiting")
+		client.Conn.Close(websocket.StatusGoingAway, "disconnected while waiting")
 		return
 	}
 
 	// notify client about match
-	ctx := r.Context()
+	wh.sendInitOffer(client)
+
+	// relay messages between clinets, blocking
+	wh.relayMessages(client)
+}
+
+func (wh *WebsocketHandler) sendInitOffer(client *room.Client) {
 
 	var messageContent string
 	if client == client.Room.Client1 {
@@ -84,18 +92,13 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 
 	messageJson, err := json.Marshal(message)
 	if err != nil {
-		fmt.Printf("unable to serialize message: %w", err)
+		fmt.Printf("unable to serialize message: %v", err)
 	}
 
 	client.Send <- messageJson
+}
 
-	// err = wh.WriteToConnection(ctx, connection, message)
-	// if err != nil {
-	// 	wh.logger.Printf("failed to send matched message: %v", err)
-	// 	return
-	// }
-
-	//==============================================================
+func (wh *WebsocketHandler) relayMessages(client *room.Client) {
 	peer := client.Room.Peer(client)
 
 	// send turn servers
@@ -112,7 +115,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 
 	// relay messages
 	for {
-		_, data, err := connection.Read(ctx)
+		_, data, err := client.Conn.Read(r.Context())
 		if err != nil {
 			wh.logger.Printf("client %v disconnected: %v", client.Id, err)
 			skipMsg, _ := json.Marshal(Message{MessageType: "skip"})
@@ -125,6 +128,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 
 		peer.Send <- data
 	}
+
 }
 
 // echo reads from the WebSocket connection and then writes
