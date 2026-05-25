@@ -10,6 +10,7 @@ import (
 	"os"
 	"sync"
 	"teaparty/internal/api"
+	"teaparty/internal/room"
 
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
@@ -18,16 +19,17 @@ import (
 type Application struct {
 	Logger           *log.Logger
 	WebsocketHandler *api.WebsocketHandler
-	WaitingQueue     chan *api.Client
-	Rooms            map[string]*api.Room
+	WaitingQueue     chan *room.Client
+	Rooms            map[string]*room.Room
 	mu               sync.Mutex
 }
 
-func (app *Application) Enqueue(connection *websocket.Conn) *api.Client {
-	client := &api.Client{
+func (app *Application) Enqueue(connection *websocket.Conn) *room.Client {
+	client := &room.Client{
 		Id:      uuid.NewString(),
 		Conn:    connection,
 		Matched: make(chan struct{}),
+		Send:    make(chan []byte, 4),
 	}
 
 	app.WaitingQueue <- client
@@ -38,9 +40,9 @@ func NewApplication() *Application {
 	logger := log.New(os.Stdout, "", log.Ldate|log.Ltime)
 	app := &Application{
 		Logger:       logger,
-		WaitingQueue: make(chan *api.Client, 100),
+		WaitingQueue: make(chan *room.Client, 100),
 		mu:           sync.Mutex{},
-		Rooms:        make(map[string]*api.Room),
+		Rooms:        make(map[string]*room.Room),
 	}
 
 	app.WebsocketHandler = api.NewWebsocketHandler(logger, app)
@@ -56,7 +58,7 @@ func (app *Application) DeleteRoom(roomId string) {
 	delete(app.Rooms, roomId)
 }
 
-func (app *Application) Skip(client *api.Client) {
+func (app *Application) Skip(client *room.Client) {
 	client1 := client.Room.Client1
 	client2 := client.Room.Client2
 
@@ -82,7 +84,7 @@ func (app *Application) MakePairs() {
 		turnServers := app.fetchTurnServers()
 
 		// create a room and populate the room
-		room := &api.Room{
+		room := &room.Room{
 			Id:          uuid.NewString(),
 			Client1:     client1,
 			Client2:     client2,
