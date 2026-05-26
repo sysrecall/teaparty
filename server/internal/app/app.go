@@ -26,15 +26,45 @@ type Application struct {
 }
 
 func (app *Application) Enqueue(connection *websocket.Conn) *room.Client {
-	client := &room.Client{
+	client1 := &room.Client{
 		Id:      uuid.NewString(),
 		Conn:    connection,
 		Matched: make(chan struct{}),
 		Send:    make(chan []byte, 4),
 	}
 
-	app.WaitingQueue <- client
-	return client
+	if len(app.WaitingQueue) == 0 {
+		app.WaitingQueue <- client1
+		return client1
+	}
+
+	client2 := <-app.WaitingQueue
+
+	// assign turn servers on pair
+	turnServers, _ := app.fetchTurnServers()
+
+	// create a room and populate the room
+	room := &room.Room{
+		Id:          uuid.NewString(),
+		Client1:     client1,
+		Client2:     client2,
+		TurnServers: turnServers,
+	}
+
+	// assign same room to matched clients
+	client1.Room = room
+	client2.Room = room
+
+	// update rooms
+	app.mu.Lock()
+	app.Rooms[room.Id] = room
+	app.mu.Unlock()
+
+	// close matching channel, this will unblock the handler method
+	close(client1.Matched)
+	close(client2.Matched)
+
+	return client1
 }
 
 func NewApplication() *Application {
@@ -74,38 +104,6 @@ func (app *Application) Skip(client *room.Client) {
 	// queue for new pair
 	app.WaitingQueue <- client1
 	app.WaitingQueue <- client2
-}
-
-func (app *Application) MakePairs() {
-	for {
-		// fetch two clients, block until two found
-		client1 := <-app.WaitingQueue
-		client2 := <-app.WaitingQueue
-
-		// assign turn servers on pair
-		turnServers, _ := app.fetchTurnServers()
-
-		// create a room and populate the room
-		room := &room.Room{
-			Id:          uuid.NewString(),
-			Client1:     client1,
-			Client2:     client2,
-			TurnServers: turnServers,
-		}
-
-		// assign same room to matched clients
-		client1.Room = room
-		client2.Room = room
-
-		// update rooms
-		app.mu.Lock()
-		app.Rooms[room.Id] = room
-		app.mu.Unlock()
-
-		// close matching channel, this will unblock the handler method
-		close(client1.Matched)
-		close(client2.Matched)
-	}
 }
 
 type turnCredentials struct {

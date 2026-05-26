@@ -73,7 +73,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 	wh.sendInitOffer(client)
 
 	// relay messages between clinets, blocking
-	wh.relayMessages(client)
+	wh.relayMessages(r, client)
 }
 
 func (wh *WebsocketHandler) sendInitOffer(client *room.Client) {
@@ -98,7 +98,7 @@ func (wh *WebsocketHandler) sendInitOffer(client *room.Client) {
 	client.Send <- messageJson
 }
 
-func (wh *WebsocketHandler) relayMessages(client *room.Client) {
+func (wh *WebsocketHandler) relayMessages(r *http.Request, client *room.Client) {
 	peer := client.Room.Peer(client)
 
 	// send turn servers
