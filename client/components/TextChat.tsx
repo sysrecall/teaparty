@@ -1,25 +1,24 @@
 import ChatDisplay from "@/components/ui/TextChat/ChatDisplay";
 import { useEffect, useState } from "react";
-import { Status } from "./Chat";
+import { Message, Status } from "./Chat";
 
-type Message = {
-  sender: string;
-  message: string;
-};
-
-export default function TextChat({
-  status,
-  connect: handleConnect,
-  skip,
-  dataChannel,
-}: {
+type TextChatProps = {
+  messages: Message[];
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   status: Status;
   connect: () => void;
   skip: () => void;
   dataChannel: RTCDataChannel | null;
-}) {
-  const [messages, setMessages] = useState<Message[]>([]);
+};
 
+export default function TextChat({
+  messages,
+  setMessages,
+  status,
+  connect: handleConnect,
+  skip,
+  dataChannel,
+}: TextChatProps) {
   if (dataChannel) {
     dataChannel.onmessage = (event) => {
       setMessages((val) => [

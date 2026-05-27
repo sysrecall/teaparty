@@ -34,6 +34,11 @@ type TurnServer =
       credentials: string;
     };
 
+export type Message = {
+  sender: string;
+  message: string;
+};
+
 export default function Chat() {
   const socketRef = useRef<WebSocket>(null);
   const iceServers = useRef<TurnServer[]>(ICE_SERVERS);
@@ -42,6 +47,7 @@ export default function Chat() {
   const peerConnectionRef = useRef<RTCPeerConnection>(null);
   const [status, setStatus] = useState<Status>("idle");
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   function findPeer(
     socket: WebSocket,
@@ -161,6 +167,7 @@ export default function Chat() {
           setRemoteStream(undefined);
           setDataChannel(null);
           setStatus("waiting");
+          setMessages([]);
           findPeer(newSocket, newPc, stream);
           break;
 
@@ -228,6 +235,8 @@ export default function Chat() {
 
       <div className="w-2/3 h-full">
         <TextChat
+          messages={messages}
+          setMessages={setMessages}
           skip={skip}
           status={status}
           connect={connect}
