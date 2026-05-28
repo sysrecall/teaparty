@@ -10,8 +10,8 @@ const MIN_HEIGHT = 600;
 const CONSTRAINTS = {
   // audio: { echoCancellation: true },
   video: {
-    width: { min: MIN_WIDTH },
-    height: { min: MIN_HEIGHT },
+    width: { ideal: MIN_WIDTH },
+    height: { ideal: MIN_HEIGHT },
   },
 };
 
@@ -39,6 +39,8 @@ export type Message = {
   message: string;
 };
 
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8080/ws";
+
 export default function Chat() {
   const socketRef = useRef<WebSocket>(null);
   const iceServers = useRef<TurnServer[]>(ICE_SERVERS);
@@ -54,6 +56,8 @@ export default function Chat() {
     pc: RTCPeerConnection,
     stream: MediaStream,
   ) {
+    console.log("finding peers");
+
     const pendingCandidates: RTCIceCandidate[] = [];
 
     pc.ondatachannel = (event) => {
@@ -87,12 +91,12 @@ export default function Chat() {
         case "match":
           pc.onicecandidate = (event) => {
             if (event.candidate) {
-              socket.send(
-                JSON.stringify({
-                  type: "candidate",
-                  message: event.candidate,
-                }),
-              );
+              const message = JSON.stringify({
+                type: "candidate",
+                message: event.candidate,
+              });
+
+              socket.send(message);
             }
           };
 
@@ -103,12 +107,12 @@ export default function Chat() {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
 
-            socket.send(
-              JSON.stringify({
-                type: "offer",
-                message: offer,
-              }),
-            );
+            const message = JSON.stringify({
+              type: "offer",
+              message: offer,
+            });
+
+            socket.send(message);
           }
 
           break;
@@ -119,7 +123,6 @@ export default function Chat() {
           pc.setConfiguration({
             iceServers: iceServers.current,
           });
-          pc.restartIce();
 
           break;
 
@@ -130,12 +133,12 @@ export default function Chat() {
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
-          socket.send(
-            JSON.stringify({
-              type: "answer",
-              message: answer,
-            }),
-          );
+          const message = JSON.stringify({
+            type: "answer",
+            message: answer,
+          });
+
+          socket.send(message);
 
           break;
 
@@ -154,21 +157,26 @@ export default function Chat() {
 
         case "skip":
           peerConnectionRef.current?.close();
+
           if (socketRef.current) {
             socketRef.current.onclose = null;
             socketRef.current.close();
           }
-          const newSocket = new WebSocket("ws://localhost:8080/ws");
+
+          const newSocket = new WebSocket(WS_URL);
           socketRef.current = newSocket;
+
           const newPc = new RTCPeerConnection({
             iceServers: iceServers.current,
           });
+
           peerConnectionRef.current = newPc;
           setRemoteStream(undefined);
           setDataChannel(null);
           setStatus("waiting");
           setMessages([]);
           findPeer(newSocket, newPc, stream);
+
           break;
 
         case "candidate":
@@ -196,16 +204,27 @@ export default function Chat() {
   }
 
   async function connect() {
-    const socket = new WebSocket("ws://localhost:8080/ws");
+    console.log("Connecting");
+
+    let stream: MediaStream;
+    try {
+      stream = await openCamera(CONSTRAINTS);
+    } catch (err) {
+      console.error("Camera error:", err);
+      return;
+    }
+
+    setLocalStream(stream);
+
+    console.log("local stream set");
+
+    setStatus("waiting");
+
+    const socket = new WebSocket(WS_URL);
     socketRef.current = socket;
 
     const pc = new RTCPeerConnection({ iceServers: iceServers.current });
     peerConnectionRef.current = pc;
-
-    const stream = await openCamera(CONSTRAINTS);
-    setLocalStream(stream);
-
-    setStatus("waiting");
 
     findPeer(socket, pc, stream);
   }
@@ -214,7 +233,7 @@ export default function Chat() {
     peerConnectionRef.current?.close();
     socketRef.current?.close();
 
-    const socket = new WebSocket("ws://localhost:8080/ws");
+    const socket = new WebSocket(WS_URL);
     socketRef.current = socket;
 
     const pc = new RTCPeerConnection({ iceServers: iceServers.current });
@@ -223,6 +242,7 @@ export default function Chat() {
     setRemoteStream(undefined);
     setDataChannel(null);
     setStatus("waiting");
+    setMessages([]);
 
     findPeer(socket, pc, localStream!);
   }
