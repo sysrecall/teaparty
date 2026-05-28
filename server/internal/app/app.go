@@ -22,24 +22,10 @@ type Application struct {
 	WebsocketHandler *api.WebsocketHandler
 	WaitingQueue     chan *room.Client
 	Rooms            map[string]*room.Room
-	mu               sync.Mutex
+	roomMutex        sync.Mutex
 }
 
-func (app *Application) Enqueue(connection *websocket.Conn) *room.Client {
-	client1 := &room.Client{
-		Id:      uuid.NewString(),
-		Conn:    connection,
-		Matched: make(chan struct{}),
-		Send:    make(chan []byte, 4),
-	}
-
-	if len(app.WaitingQueue) == 0 {
-		app.WaitingQueue <- client1
-		return client1
-	}
-
-	client2 := <-app.WaitingQueue
-
+func (app *Application) MakePair(client1 *room.Client, client2 *room.Client) {
 	// assign turn servers on pair
 	turnServers, _ := app.fetchTurnServers()
 
@@ -56,13 +42,29 @@ func (app *Application) Enqueue(connection *websocket.Conn) *room.Client {
 	client2.Room = room
 
 	// update rooms
-	app.mu.Lock()
+	app.roomMutex.Lock()
 	app.Rooms[room.Id] = room
-	app.mu.Unlock()
+	app.roomMutex.Unlock()
 
 	// close matching channel, this will unblock the handler method
 	close(client1.Matched)
 	close(client2.Matched)
+}
+
+func (app *Application) Enqueue(connection *websocket.Conn) *room.Client {
+	client1 := &room.Client{
+		Id:      uuid.NewString(),
+		Conn:    connection,
+		Matched: make(chan struct{}),
+		Send:    make(chan []byte, 4),
+	}
+
+	select {
+	case client2 := <-app.WaitingQueue:
+		app.MakePair(client1, client2)
+	default:
+		app.WaitingQueue <- client1
+	}
 
 	return client1
 }
@@ -72,7 +74,7 @@ func NewApplication() *Application {
 	app := &Application{
 		Logger:       logger,
 		WaitingQueue: make(chan *room.Client, 100),
-		mu:           sync.Mutex{},
+		roomMutex:    sync.Mutex{},
 		Rooms:        make(map[string]*room.Room),
 	}
 

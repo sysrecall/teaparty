@@ -42,7 +42,7 @@ func (wh *WebsocketHandler) HandleWebsocket(w http.ResponseWriter, r *http.Reque
 	// create connection
 	connection, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		// Subprotocols: []string{"echo"},
-		OriginPatterns: []string{"localhost*"},
+		OriginPatterns: []string{"*"},
 	})
 
 	if err != nil {
@@ -115,6 +115,9 @@ func (wh *WebsocketHandler) relayMessages(r *http.Request, client *room.Client) 
 
 	// relay messages
 	for {
+		// read from client
+		// if there are any error we skip ?
+		// otherwise send the message to the
 		_, data, err := client.Conn.Read(r.Context())
 		if err != nil {
 			wh.logger.Printf("client %v disconnected: %v", client.Id, err)
@@ -122,6 +125,7 @@ func (wh *WebsocketHandler) relayMessages(r *http.Request, client *room.Client) 
 			// peer.Conn.Write(relayContext, websocket.MessageText, skipMsg)
 			peer.Send <- skipMsg
 			// peer.Conn.Close(websocket.StatusGoingAway, "peer disconnected")
+			close(client.Send)
 			close(peer.Send)
 			return
 		}

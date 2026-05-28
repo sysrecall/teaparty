@@ -41,8 +41,8 @@ func run() error {
 
 	server := &http.Server{
 		Handler:      handler,
-		ReadTimeout:  time.Second * 10,
-		WriteTimeout: time.Second * 10,
+		ReadTimeout:  0, // time.Second * 10,
+		WriteTimeout: 0, // time.Second * 10,
 	}
 
 	errorChannel := make(chan error, 1)
