@@ -88,7 +88,9 @@ func (app *Application) HealthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *Application) DeleteRoom(roomId string) {
+	app.roomMutex.Lock()
 	delete(app.Rooms, roomId)
+	app.roomMutex.Unlock()
 }
 
 func (app *Application) Skip(client *room.Client) {
