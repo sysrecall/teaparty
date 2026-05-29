@@ -56,8 +56,6 @@ export default function Chat() {
     pc: RTCPeerConnection,
     stream: MediaStream,
   ) {
-    console.log("finding peers");
-
     const pendingCandidates: RTCIceCandidate[] = [];
 
     pc.ondatachannel = (event) => {
@@ -204,8 +202,6 @@ export default function Chat() {
   }
 
   async function connect() {
-    console.log("Connecting");
-
     let stream: MediaStream;
     try {
       stream = await openCamera(CONSTRAINTS);
@@ -215,8 +211,6 @@ export default function Chat() {
     }
 
     setLocalStream(stream);
-
-    console.log("local stream set");
 
     setStatus("waiting");
 
@@ -248,12 +242,12 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex w-full h-full">
-      <div className="w-1/3 h-full">
+    <div className="flex flex-col md:flex-row w-full h-full gap-2 md:gap-0">
+      <div className="w-full h-[40vh] md:w-1/3 md:h-full flex-shrink-0">
         <VideoChat localStream={localStream} remoteStream={remoteStream} />
       </div>
 
-      <div className="w-2/3 h-full">
+      <div className="w-full flex-1 md:w-2/3 min-h-0">
         <TextChat
           messages={messages}
           setMessages={setMessages}
